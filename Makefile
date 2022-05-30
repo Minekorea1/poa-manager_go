@@ -1,7 +1,7 @@
 # uncomment if for windows
 # SHELL=C:/Program Files/Git/usr/bin/bash.exe
-MODULE=poa
-BIN=poa
+MODULE=poa-manager
+BIN=poa-manager
 
 $(info $(SHELL))
 

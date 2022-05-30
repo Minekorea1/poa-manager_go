@@ -47,9 +47,16 @@ var (
 )
 
 type contentStatus struct {
-	content     *fyne.Container
-	labelStatus *widget.Label
-	listDevices *widget.List
+	content           *fyne.Container
+	labelStatus       *widget.Label
+	listDevices       *widget.List
+	detailContent     *fyne.Container
+	labelDetailID     *widget.Label
+	labelDetailHeader *widget.Label
+	labelDetailData   *widget.Label
+	buttonRemove      *widget.Button
+
+	selectedDevice *manager.DeviceInfo
 }
 
 type contentStructure struct {
@@ -123,41 +130,21 @@ func (menu *Menu) MakeMenu(parent *fyne.Container) *fyne.Container {
 			if m, ok := menus[uid]; ok {
 				m.content.SetMainContent()
 
-				if activeContect == configContent.content {
-					configContent.serverAddressEntry.SetText(poaContext.Configs.PoaServerAddress)
-					configContent.serverPortEntry.SetText(strconv.FormatInt(int64(poaContext.Configs.PoaServerPort), 10))
-					configContent.mqttAddressEntry.SetText(poaContext.Configs.MqttBrokerAddress)
-					configContent.mqttPortEntry.SetText(strconv.FormatInt(int64(poaContext.Configs.MqttPort), 10))
+				if activeContect == statusContent.content {
+					statusContent.detailContent.Hide()
+					statusContent.selectedDevice = nil
 				} else if activeContect == structureContent.content {
-					// structureContent.treeData = map[string][]string{}
-
-					// publicIps := map[string]manager.DeviceInfo{}
-					// for _, device := range poaManager.TotalDevices {
-					// 	publicIps[device.PublicIp] = *device
-					// }
-
-					// roots := []string{}
-					// for publicIp := range publicIps {
-					// 	roots = append(roots, publicIp)
-
-					// 	for _, device := range poaManager.TotalDevices {
-					// 		if publicIp == device.PublicIp {
-					// 			structureContent.treeData[publicIp] = append(structureContent.treeData[publicIp], structureContent.makeUid(device))
-					// 		}
-					// 	}
-					// }
-
-					// sort.Slice(roots, func(i, j int) bool {
-					// 	return roots[i] < roots[j]
-					// })
-					// structureContent.treeData[""] = roots
-
 					structureContent.updateTreeView()
 					structureContent.treeDevices.OpenAllBranches()
 
 					structureContent.treeDevices.UnselectAll()
 					structureContent.detailContent.Hide()
 					structureContent.selectedDevice = nil
+				} else if activeContect == configContent.content {
+					configContent.serverAddressEntry.SetText(poaContext.Configs.PoaServerAddress)
+					configContent.serverPortEntry.SetText(strconv.FormatInt(int64(poaContext.Configs.PoaServerPort), 10))
+					configContent.mqttAddressEntry.SetText(poaContext.Configs.MqttBrokerAddress)
+					configContent.mqttPortEntry.SetText(strconv.FormatInt(int64(poaContext.Configs.MqttPort), 10))
 				}
 			}
 		},
@@ -171,7 +158,24 @@ func RunUpdateThread() {
 		for {
 			poaManager.WaitUpdated()
 
-			if activeContect == structureContent.content {
+			if activeContect == statusContent.content {
+				totalCount := len(poaManager.TotalDevices)
+				deadCount := len(poaManager.DeadDevices)
+				statusContent.labelStatus.SetText(fmt.Sprintf("전체: %d 대, 정상: %d 대, 응답 없음: %d 대", totalCount, totalCount-deadCount, deadCount))
+
+				statusContent.listDevices.Refresh()
+				statusContent.updateDetailView(statusContent.selectedDevice)
+
+				// status.labelOwner.SetText(fmt.Sprintf("사용자: %s", deviceInfo.Owner))
+				// status.labelOwnNumber.SetText(fmt.Sprintf("장치 번호: %d", deviceInfo.OwnNumber))
+				// status.labelDesc.SetText(fmt.Sprintf("설명: %s", deviceInfo.DeviceDesc))
+				// status.labelPublicIp.SetText(fmt.Sprintf("공인IP: %s", deviceInfo.PublicIp))
+				// status.labelPrivateIp.SetText(fmt.Sprintf("내부IP: %s", deviceInfo.PrivateIp))
+				// status.labelMacAddress.SetText(fmt.Sprintf("맥주소: %s", deviceInfo.MacAddress))
+				// status.labelDeviceId.SetText(fmt.Sprintf("장치 고유번호: %s", deviceInfo.DeviceId))
+				// status.labelLastPoaTime.SetText(fmt.Sprintf("마지막 통신 시간: %s", time.Unix(deviceInfo.Timestamp, 0).Format("2006-01-02 15:04")))
+				// status.labelVersion.SetText(fmt.Sprintf("버전: %s", poaContext.Version))
+			} else if activeContect == structureContent.content {
 				structureContent.updateTreeView()
 				structureContent.treeDevices.Refresh()
 
@@ -181,6 +185,7 @@ func RunUpdateThread() {
 	}()
 }
 
+//TODO:
 func newStatusContent() *contentStatus {
 	status := contentStatus{}
 
@@ -191,21 +196,52 @@ func newStatusContent() *contentStatus {
 	status.listDevices = widget.NewList(
 		func() int { return len(poaManager.TotalDevices) },
 		func() fyne.CanvasObject {
-			return container.NewHBox(widget.NewIcon(res.Ic_main), widget.NewLabel("Template Object"), layout.NewSpacer(),
-				widget.NewButton("삭제", nil))
+			return container.NewHBox(widget.NewIcon(res.Ic_error), widget.NewLabel("Template Object"), layout.NewSpacer())
 		},
 		func(id widget.ListItemID, item fyne.CanvasObject) {
-			item.(*fyne.Container).Objects[1].(*widget.Label).SetText(poaManager.TotalDevices[id].Owner)
-			item.(*fyne.Container).Objects[3].(*widget.Button).OnTapped = func() { fmt.Println("tab: ", id) }
+			device := poaManager.TotalDevices[id]
+
+			if device.Alive {
+				item.(*fyne.Container).Objects[0].(*widget.Icon).Hide()
+			} else {
+				item.(*fyne.Container).Objects[0].(*widget.Icon).Show()
+			}
+
+			item.(*fyne.Container).Objects[1].(*widget.Label).SetText(fmt.Sprintf("%s[%d] %s", device.Owner, device.OwnNumber, device.DeviceDesc))
 		})
 	status.listDevices.OnSelected = func(id widget.ListItemID) {
-		fmt.Println("item selected")
+		device := poaManager.TotalDevices[id]
+		status.selectedDevice = device
+		status.updateDetailView(device)
+		status.detailContent.Show()
+
+		// remove device button
+		status.buttonRemove.OnTapped = func() {
+			fmt.Println("remove device: ", device)
+			if ok, _ := poaManager.RemoveDevices(device.DeviceId); ok {
+				status.detailContent.Hide()
+				status.listDevices.UnselectAll()
+				status.selectedDevice = nil
+			}
+		}
 	}
 	status.listDevices.OnUnselected = func(id widget.ListItemID) {
-		fmt.Println("Select An Item From The List")
 	}
 
-	status.content.Add(container.NewBorder(status.labelStatus, nil, nil, nil, status.listDevices))
+	status.detailContent = container.NewVBox()
+	status.labelDetailID = widget.NewLabel("")
+	status.labelDetailHeader = widget.NewLabel("")
+	status.labelDetailData = widget.NewLabel("")
+	status.buttonRemove = widget.NewButton("목록에서 제거", nil)
+
+	status.detailContent.Add(status.labelDetailID)
+	status.detailContent.Add(widget.NewSeparator())
+	status.detailContent.Add(status.labelDetailHeader)
+	status.detailContent.Add(status.labelDetailData)
+	status.detailContent.Add(layout.NewSpacer())
+	status.detailContent.Add(status.buttonRemove)
+
+	status.content.Add(container.NewBorder(status.labelStatus, nil, nil, nil, container.NewHSplit(status.listDevices, status.detailContent)))
 
 	// status.content.Add(container.NewVBox(status.labelOwner, status.labelOwnNumber))
 	// status.content.Add(status.labelDesc)
@@ -224,6 +260,29 @@ func (status *contentStatus) SetMainContent() {
 		parentContainer.Objects = []fyne.CanvasObject{status.content}
 		activeContect = status.content
 	}
+}
+
+func (status *contentStatus) updateDetailView(device *manager.DeviceInfo) {
+	if device == nil {
+		return
+	}
+
+	device = poaManager.Devices[device.DeviceId]
+	if device == nil {
+		return
+	}
+
+	var aliveText string
+	if device.Alive {
+		aliveText = "정상"
+	} else {
+		aliveText = "응답 없음"
+	}
+
+	status.labelDetailID.SetText(fmt.Sprintf("장치 고유번호: %s", device.DeviceId))
+	status.labelDetailHeader.SetText(fmt.Sprintf("사용자: %s\n장치번호: %d\n설명: %s", device.Owner, device.OwnNumber, device.DeviceDesc))
+	status.labelDetailData.SetText(fmt.Sprintf("공인IP: %s\n내부IP: %s\n맥주소: %s\n\n마지막 통신 시간: %s\n통신상태: %s",
+		device.PublicIp, device.PrivateIp, device.MacAddress, time.Unix(device.Timestamp, 0).Format("2006-01-02 15:04:05"), aliveText))
 }
 
 func newStructureContent() *contentStructure {
@@ -409,7 +468,7 @@ func (structure *contentStructure) updateDetailView(device *manager.DeviceInfo) 
 	structure.labelDetailID.SetText(fmt.Sprintf("장치 고유번호: %s", device.DeviceId))
 	structure.labelDetailHeader.SetText(fmt.Sprintf("사용자: %s\n장치번호: %d\n설명: %s", device.Owner, device.OwnNumber, device.DeviceDesc))
 	structure.labelDetailData.SetText(fmt.Sprintf("공인IP: %s\n내부IP: %s\n맥주소: %s\n\n마지막 통신 시간: %s\n통신상태: %s",
-		device.PublicIp, device.PrivateIp, device.MacAddress, time.Unix(device.Timestamp, 0).Format("2006-01-02 15:04"), aliveText))
+		device.PublicIp, device.PrivateIp, device.MacAddress, time.Unix(device.Timestamp, 0).Format("2006-01-02 15:04:04"), aliveText))
 
 	structure.treeDevices.Select(structure.makeUid(device))
 }
@@ -459,23 +518,5 @@ func (config *contentConfig) SetMainContent() {
 	if parentContainer != nil {
 		parentContainer.Objects = []fyne.CanvasObject{config.content}
 		activeContect = config.content
-	}
-}
-
-func Refresh() {
-	if activeContect == statusContent.content {
-		totalCount := len(poaManager.TotalDevices)
-		deadCount := len(poaManager.DeadDevices)
-		statusContent.labelStatus.SetText(fmt.Sprintf("전체: %d 대, 정상: %d 대, 응답 없음: %d 대", totalCount, totalCount-deadCount, deadCount))
-
-		// status.labelOwner.SetText(fmt.Sprintf("사용자: %s", deviceInfo.Owner))
-		// status.labelOwnNumber.SetText(fmt.Sprintf("장치 번호: %d", deviceInfo.OwnNumber))
-		// status.labelDesc.SetText(fmt.Sprintf("설명: %s", deviceInfo.DeviceDesc))
-		// status.labelPublicIp.SetText(fmt.Sprintf("공인IP: %s", deviceInfo.PublicIp))
-		// status.labelPrivateIp.SetText(fmt.Sprintf("내부IP: %s", deviceInfo.PrivateIp))
-		// status.labelMacAddress.SetText(fmt.Sprintf("맥주소: %s", deviceInfo.MacAddress))
-		// status.labelDeviceId.SetText(fmt.Sprintf("장치 고유번호: %s", deviceInfo.DeviceId))
-		// status.labelLastPoaTime.SetText(fmt.Sprintf("마지막 통신 시간: %s", time.Unix(deviceInfo.Timestamp, 0).Format("2006-01-02 15:04")))
-		// status.labelVersion.SetText(fmt.Sprintf("버전: %s", poaContext.Version))
 	}
 }

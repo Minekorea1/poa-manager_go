@@ -10,7 +10,6 @@ import (
 	"poa-manager/res"
 	"poa-manager/ui"
 	"strings"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-	VERSION_NAME        = "v0.1.0"
+	VERSION_NAME        = "v0.2.0"
 	POA_SERVER_ADDRESS  = "minekorea.asuscomm.com"
 	POA_SERVER_PORT     = 8888
 	MQTT_BROKER_ADDRESS = "minekorea.asuscomm.com"
@@ -77,18 +76,12 @@ func main() {
 	a.SetIcon(res.Ic_main)
 	a.Settings().SetTheme(&ui.MyTheme{})
 	a.Lifecycle().SetOnStarted(func() {
-		go func() {
-			for {
-				ui.Refresh()
-
-				time.Sleep(time.Second)
-			}
-		}()
+		log.Println("Lifecycle: Started")
 	})
 	a.Lifecycle().SetOnStopped(func() {
 		log.Println("Lifecycle: Stopped")
 	})
-	win := a.NewWindow("PoA Manager")
+	win := a.NewWindow("PoA Manager " + VERSION_NAME)
 	a.Settings().SetTheme(&ui.MyTheme{})
 	win.SetMaster()
 
