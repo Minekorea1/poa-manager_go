@@ -14,10 +14,12 @@ type Context struct {
 }
 
 type Configs struct {
-	PoaServerAddress  string
-	PoaServerPort     int
-	MqttBrokerAddress string
-	MqttPort          int
+	UpdateAddress          string
+	UpdateCheckIntervalSec int
+	PoaServerAddress       string
+	PoaServerPort          int
+	MqttBrokerAddress      string
+	MqttPort               int
 }
 
 type DeviceType int

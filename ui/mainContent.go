@@ -185,7 +185,6 @@ func RunUpdateThread() {
 	}()
 }
 
-//TODO:
 func newStatusContent() *contentStatus {
 	status := contentStatus{}
 
