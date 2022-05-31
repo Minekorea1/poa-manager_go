@@ -98,7 +98,11 @@ func (manager *Manager) mqttSubscribeHandler(client mqtt.Client, msg mqtt.Messag
 				return
 			}
 
-			oldDeviceInfo := *manager.Devices[deviceInfo.DeviceId]
+			var oldDeviceInfo DeviceInfo
+
+			if _, ok := manager.Devices[deviceInfo.DeviceId]; ok {
+				oldDeviceInfo = *manager.Devices[deviceInfo.DeviceId]
+			}
 
 			// Check changing the information displayed on the screen
 			if deviceInfo.Owner != oldDeviceInfo.Owner ||

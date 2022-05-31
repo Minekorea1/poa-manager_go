@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	VERSION_NAME                          = "v0.2.0"
+	VERSION_NAME                          = "v0.2.1"
 	APPLICATION_UPDATE_ADDRESS            = "github.com/Minekorea1/poa-manager_go"
 	APPLICATION_UPDATE_CHECK_INTERVAL_SEC = 3600
 	POA_SERVER_ADDRESS                    = "minekorea.asuscomm.com"
