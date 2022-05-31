@@ -111,7 +111,8 @@ func (manager *Manager) mqttSubscribeHandler(client mqtt.Client, msg mqtt.Messag
 				deviceInfo.PublicIp != oldDeviceInfo.PublicIp ||
 				deviceInfo.PrivateIp != oldDeviceInfo.PrivateIp ||
 				deviceInfo.MacAddress != oldDeviceInfo.MacAddress ||
-				deviceInfo.DeviceType != oldDeviceInfo.DeviceType {
+				deviceInfo.DeviceType != oldDeviceInfo.DeviceType ||
+				deviceInfo.Timestamp != oldDeviceInfo.Timestamp {
 				manager.condChan <- 0
 			}
 		}

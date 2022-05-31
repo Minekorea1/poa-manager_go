@@ -3,7 +3,7 @@
 MODULE=poa-manager
 BIN=poa-manager
 
-$(info $(SHELL))
+# $(info $(SHELL))
 
 all: windows linux
 
