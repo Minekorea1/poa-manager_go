@@ -131,6 +131,7 @@ func (menu *Menu) MakeMenu(parent *fyne.Container) *fyne.Container {
 				m.content.SetMainContent()
 
 				if activeContect == statusContent.content {
+					statusContent.listDevices.UnselectAll()
 					statusContent.detailContent.Hide()
 					statusContent.selectedDevice = nil
 				} else if activeContect == structureContent.content {
@@ -239,6 +240,7 @@ func newStatusContent() *contentStatus {
 	status.detailContent.Add(status.labelDetailData)
 	status.detailContent.Add(layout.NewSpacer())
 	status.detailContent.Add(status.buttonRemove)
+	status.detailContent.Hide()
 
 	status.content.Add(container.NewBorder(status.labelStatus, nil, nil, nil, container.NewHSplit(status.listDevices, status.detailContent)))
 
