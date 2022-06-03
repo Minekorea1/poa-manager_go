@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	VERSION_NAME                          = "v0.2.4"
+	VERSION_NAME                          = "v0.3.0"
 	APPLICATION_UPDATE_ADDRESS            = "github.com/Minekorea1/poa-manager_go"
 	APPLICATION_UPDATE_CHECK_INTERVAL_SEC = 3600
 )

@@ -82,25 +82,29 @@ type Response struct {
 	Remove *Remove `json:"Remove,omitempty"`
 }
 
+type Update struct {
+	ForceUpdate   bool   `json:"ForceUpdate,omitempty"`
+	UpdateAddress string `json:"UpdateAddress,omitempty"`
+}
+
+type Mqtt struct {
+	MqttBrokerAddress string `json:"MqttBrokerAddress,omitempty"`
+	MqttPort          int    `json:"MqttPort,omitempty"`
+	MqttUser          string `json:"MqttUser,omitempty"`
+	MqttPassword      string `json:"MqttPassword,omitempty"`
+}
+
+type Restart struct {
+	Restart bool `json:"Restart,omitempty"`
+}
+
 // server to client
 type Command struct {
 	Type string
 
-	Update struct {
-		ForceUpdate   bool
-		UpdateAddress string
-	}
-
-	Mqtt struct {
-		MqttBrokerAddress string
-		MqttPort          int
-		MqttUser          string
-		MqttPassword      string
-	}
-
-	Restart struct {
-		Restart bool
-	}
+	Update  *Update  `json:"Update,omitempty"`
+	Mqtt    *Mqtt    `json:"Mqtt,omitempty"`
+	Restart *Restart `json:"Restart,omitempty"`
 }
 
 func NewManager() *Manager {
@@ -330,7 +334,7 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 
 	switch name {
 	case event.EVENT_MANAGER_DEVICE_RESTART:
-		command := Command{Type: "restart"}
+		command := Command{Type: "restart", Restart: &Restart{}}
 		command.Restart.Restart = true
 
 		doc, err := json.MarshalIndent(command, "", "    ")
@@ -341,8 +345,8 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 
 					fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
 
-					// token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
-					// token.Wait()
+					token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
+					token.Wait()
 				}
 			}
 		} else {
@@ -351,7 +355,7 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 
 	case event.EVENT_MANAGER_DEVICE_MQTT_CHANGE_USER_PASSWORD:
 		if len(args) == 2 {
-			command := Command{Type: "mqtt"}
+			command := Command{Type: "mqtt", Mqtt: &Mqtt{}}
 			command.Mqtt.MqttUser = args[0].(string)
 			command.Mqtt.MqttPassword = args[1].(string)
 
@@ -360,6 +364,8 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 				for _, device := range manager.TotalDevices {
 					if device.Alive {
 						cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
+
+						fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
 
 						token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
 						token.Wait()
@@ -370,7 +376,7 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 			}
 		}
 	case event.EVENT_MANAGER_DEVICE_FORCE_UPDATE:
-		command := Command{Type: "update"}
+		command := Command{Type: "update", Update: &Update{}}
 		command.Update.ForceUpdate = true
 
 		doc, err := json.MarshalIndent(command, "", "    ")
@@ -378,6 +384,8 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 			for _, device := range manager.TotalDevices {
 				if device.Alive {
 					cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
+
+					fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
 
 					token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
 					token.Wait()
@@ -389,7 +397,7 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 
 	case event.EVENT_MANAGER_DEVICE_CHANGE_UPDATE_ADDRESS:
 		if len(args) == 1 {
-			command := Command{Type: "update"}
+			command := Command{Type: "update", Update: &Update{}}
 			command.Update.UpdateAddress = args[0].(string)
 
 			doc, err := json.MarshalIndent(command, "", "    ")
@@ -397,6 +405,8 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 				for _, device := range manager.TotalDevices {
 					if device.Alive {
 						cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
+
+						fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
 
 						token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
 						token.Wait()

@@ -42,10 +42,10 @@ var (
 	parentContainer *fyne.Container
 	activeContect   *fyne.Container
 
-	statusContent    *contentStatus
-	structureContent *contentStructure
-	commandContent   *contentCommand
-	configContent    *contentConfig
+	statusContent        *contentStatus
+	structureContent     *contentStructure
+	deviceControlContent *contentDeviceControl
+	configContent        *contentConfig
 )
 
 type contentStatus struct {
@@ -53,6 +53,7 @@ type contentStatus struct {
 	labelStatus         *widget.Label
 	checkDeadDeviceOnly *widget.Check
 	listDevices         *widget.List
+	listItem            *fyne.Container
 	detailContent       *fyne.Container
 	labelDetailID       *widget.Label
 	labelDetailHeader   *widget.Label
@@ -76,7 +77,7 @@ type contentStructure struct {
 	selectedDevice *manager.DeviceInfo
 }
 
-type contentCommand struct {
+type contentDeviceControl struct {
 	content             *fyne.Container
 	buttonMqttUserPwd   *widget.Button
 	buttonUpdateAddress *widget.Button
@@ -100,18 +101,18 @@ func Init(_ *fyne.App, win *fyne.Window, ctx *context.Context, m *manager.Manage
 
 	statusContent = newStatusContent()
 	structureContent = newStructureContent()
-	commandContent = newCommandContent()
+	deviceControlContent = newCommandDeviceControl()
 	configContent = newConfigContent()
 
 	menus = map[string]Menu{
-		"status":    {"전체상태", "등록된 장치들의 현재 상태를 표시합니다.", statusContent},
-		"structure": {"네트워크별 보기", "등록된 장치들의 목록을 표시합니다.", structureContent},
-		"command":   {"명령 전송", "모든 장치에게 명령 메시지를 전송합니다..", commandContent},
-		"configs":   {"설정", "매니저 환경 설정을 할 수 있습니다.", configContent},
+		"status":        {"전체상태", "등록된 장치들의 현재 상태를 표시합니다.", statusContent},
+		"structure":     {"네트워크별 보기", "등록된 장치들의 목록을 표시합니다.", structureContent},
+		"deviceControl": {"장치 제어", "모든 장치에게 명령 메시지를 전송합니다..", deviceControlContent},
+		"configs":       {"설정", "매니저 환경 설정을 할 수 있습니다.", configContent},
 	}
 
 	menuIndex = map[string][]string{
-		"": {"status", "structure", "command", "configs"},
+		"": {"status", "structure", "deviceControl", "configs"},
 		// "collections": {"list", "table", "tree"},
 	}
 }
@@ -240,9 +241,9 @@ func newStatusContent() *contentStatus {
 			}
 
 			if device.Alive {
-				item.(*fyne.Container).Objects[0].(*widget.Icon).Hide()
+				item.(*fyne.Container).Objects[0].Hide()
 			} else {
-				item.(*fyne.Container).Objects[0].(*widget.Icon).Show()
+				item.(*fyne.Container).Objects[0].Show()
 			}
 
 			item.(*fyne.Container).Objects[1].(*widget.Label).SetText(fmt.Sprintf("%s[%d] %s", device.Owner, device.OwnNumber, device.DeviceDesc))
@@ -521,31 +522,76 @@ func (structure *contentStructure) updateDetailView(device *manager.DeviceInfo) 
 }
 
 //TODO:
-func newCommandContent() *contentCommand {
-	command := contentCommand{}
+func newCommandDeviceControl() *contentDeviceControl {
+	deviceControl := contentDeviceControl{}
 
-	command.content = container.NewMax()
+	deviceControl.content = container.NewMax()
 
-	command.buttonMqttUserPwd = widget.NewButton("MQTT 아이디/비번 설정", func() {
-		poaContext.EventLooper.PushEvent(event.MANAGER, event.EVENT_MANAGER_DEVICE_MQTT_CHANGE_USER_PASSWORD, "mine", "minekorea@7321")
+	deviceControl.buttonMqttUserPwd = widget.NewButton("MQTT 아이디/비번 설정", func() {
+		content := container.NewVBox()
+		labelMessage := widget.NewLabel("변경할 MQTT 계정 정보를 입력해 주세요.\nMQTT 정보가 틀릴 경우 모든 장치의 서버 접속이 제한될 수 있습니다.")
+		entryUser := widget.NewEntry()
+		entryPassword := widget.NewEntry()
+		content.Add(labelMessage)
+		content.Add(entryUser)
+		content.Add(entryPassword)
+
+		dialog.ShowCustomConfirm("MQTT 계정 정보 변경", "확인", "취소", content,
+			func(ok bool) {
+				if ok && entryUser.Text != "" && entryPassword.Text != "" {
+					poaContext.EventLooper.PushEvent(event.MANAGER, event.EVENT_MANAGER_DEVICE_MQTT_CHANGE_USER_PASSWORD, entryUser.Text, entryPassword.Text)
+				}
+			}, *window)
 	})
-	command.buttonUpdateAddress = widget.NewButton("업데이트 서버 설정", func() {})
-	command.buttonForceUpdate = widget.NewButton("업데이트 확인 요청", func() {})
-	command.buttonForceRestart = widget.NewButton("어플리케이션 재시작", func() {})
 
-	command.content.Add(container.NewVBox(command.buttonMqttUserPwd, command.buttonUpdateAddress, command.buttonForceUpdate, command.buttonForceRestart))
+	deviceControl.buttonUpdateAddress = widget.NewButton("업데이트 서버 설정", func() {
+		content := container.NewVBox()
+		labelMessage := widget.NewLabel("업데이트 주소를 입력해 주세요.")
+		entryServerAddress := widget.NewEntry()
+		content.Add(labelMessage)
+		content.Add(entryServerAddress)
 
-	return &command
+		customDialog := dialog.NewCustomConfirm("업데이트 주소 설정", "확인", "취소", content,
+			func(ok bool) {
+				if ok && entryServerAddress.Text != "" {
+					poaContext.EventLooper.PushEvent(event.MANAGER, event.EVENT_MANAGER_DEVICE_CHANGE_UPDATE_ADDRESS, entryServerAddress.Text)
+				}
+			}, *window)
+		customDialog.Resize(fyne.Size{Width: 640})
+		customDialog.Show()
+	})
+
+	deviceControl.buttonForceUpdate = widget.NewButton("업데이트 확인 요청", func() {
+		poaContext.EventLooper.PushEvent(event.MANAGER, event.EVENT_MANAGER_DEVICE_FORCE_UPDATE)
+		dialog.ShowInformation("업데이트 확인 요청", "업데이트 확인을 요청했습니다.", *window)
+	})
+
+	deviceControl.buttonForceRestart = widget.NewButton("어플리케이션 재시작", func() {
+		content := container.NewVBox()
+		labelMessage := widget.NewLabel("어플리케이션 재시작을 요청하시겠습니까?.")
+		content.Add(labelMessage)
+
+		dialog.ShowCustomConfirm("어플리케이션 재시작 요청", "확인", "취소", content,
+			func(ok bool) {
+				if ok {
+					poaContext.EventLooper.PushEvent(event.MANAGER, event.EVENT_MANAGER_DEVICE_RESTART)
+				}
+			}, *window)
+	})
+
+	deviceControl.content.Add(container.NewHBox(layout.NewSpacer(), container.NewVBox(deviceControl.buttonMqttUserPwd, deviceControl.buttonUpdateAddress, deviceControl.buttonForceUpdate, deviceControl.buttonForceRestart), layout.NewSpacer()))
+
+	return &deviceControl
 }
 
-func (command *contentCommand) GetContent() *fyne.Container {
-	return command.content
+func (deviceControl *contentDeviceControl) GetContent() *fyne.Container {
+	return deviceControl.content
 }
 
-func (command *contentCommand) SetMainContent() {
+func (deviceControl *contentDeviceControl) SetMainContent() {
 	if parentContainer != nil {
-		parentContainer.Objects = []fyne.CanvasObject{command.content}
-		activeContect = command.content
+		parentContainer.Objects = []fyne.CanvasObject{deviceControl.content}
+		activeContect = deviceControl.content
 	}
 }
 
