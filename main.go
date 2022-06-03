@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"poa-manager/context"
+	"poa-manager/event"
 	"poa-manager/manager"
 	"poa-manager/res"
 	"poa-manager/ui"
@@ -19,13 +20,9 @@ import (
 )
 
 const (
-	VERSION_NAME                          = "v0.2.2"
+	VERSION_NAME                          = "v0.2.4"
 	APPLICATION_UPDATE_ADDRESS            = "github.com/Minekorea1/poa-manager_go"
 	APPLICATION_UPDATE_CHECK_INTERVAL_SEC = 3600
-	POA_SERVER_ADDRESS                    = "minekorea.asuscomm.com"
-	POA_SERVER_PORT                       = 8888
-	MQTT_BROKER_ADDRESS                   = "minekorea.asuscomm.com"
-	MQTT_PORT                             = 1883
 )
 
 func ternaryOP(cond bool, valTrue, valFalse interface{}) interface{} {
@@ -48,14 +45,6 @@ func Initialize() *context.Context {
 		APPLICATION_UPDATE_ADDRESS, context.Configs.UpdateAddress).(string)
 	context.Configs.UpdateCheckIntervalSec = ternaryOP(context.Configs.UpdateCheckIntervalSec <= 0,
 		APPLICATION_UPDATE_CHECK_INTERVAL_SEC, context.Configs.UpdateCheckIntervalSec).(int)
-	context.Configs.PoaServerAddress = ternaryOP(emptyString(context.Configs.PoaServerAddress),
-		POA_SERVER_ADDRESS, context.Configs.PoaServerAddress).(string)
-	context.Configs.PoaServerPort = ternaryOP(context.Configs.PoaServerPort <= 0,
-		POA_SERVER_PORT, context.Configs.PoaServerPort).(int)
-	context.Configs.MqttBrokerAddress = ternaryOP(emptyString(context.Configs.MqttBrokerAddress),
-		MQTT_BROKER_ADDRESS, context.Configs.MqttBrokerAddress).(string)
-	context.Configs.MqttPort = ternaryOP(context.Configs.MqttPort <= 0,
-		MQTT_PORT, context.Configs.MqttPort).(int)
 
 	return context
 }
@@ -73,6 +62,10 @@ func main() {
 	fmt.Printf("version: %s\n", VERSION_NAME)
 
 	context := Initialize()
+
+	eventLooper := event.NewEventLooper()
+	eventLooper.Loop()
+	context.EventLooper = eventLooper
 
 	updater := poaUpdater.NewUpdater()
 	updater.Init(context)

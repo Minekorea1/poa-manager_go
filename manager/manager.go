@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"poa-manager/context"
+	"poa-manager/event"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
@@ -28,7 +29,9 @@ type DeviceInfo struct {
 	OwnNumber  int
 	DeviceType int
 	DeviceDesc string
-	Alive      bool
+	Version    string
+
+	Alive bool
 }
 
 type Manager struct {
@@ -46,6 +49,8 @@ type Manager struct {
 	mqttOpts       *mqtt.ClientOptions
 	mqttQos        byte
 	mqttClientName string
+	mqttUser       string
+	mqttPassword   string
 
 	condChan chan int
 
@@ -77,13 +82,34 @@ type Response struct {
 	Remove *Remove `json:"Remove,omitempty"`
 }
 
+// server to client
+type Command struct {
+	Type string
+
+	Update struct {
+		ForceUpdate   bool
+		UpdateAddress string
+	}
+
+	Mqtt struct {
+		MqttBrokerAddress string
+		MqttPort          int
+		MqttUser          string
+		MqttPassword      string
+	}
+
+	Restart struct {
+		Restart bool
+	}
+}
+
 func NewManager() *Manager {
 	return &Manager{Devices: make(map[string]*DeviceInfo)}
 }
 
 func (manager *Manager) mqttSubscribeHandler(client mqtt.Client, msg mqtt.Message) {
 	go func() {
-		fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+		// fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 
 		if match, _ := regexp.MatchString("mine/server/updated", msg.Topic()); match {
 			fmt.Println("rise mqtt updated message. start check status")
@@ -129,6 +155,8 @@ func (manager *Manager) Init(poaContext *context.Context) {
 	manager.brokerPort = poaContext.Configs.MqttPort
 	manager.mqttQos = 1
 	manager.mqttClientName = fmt.Sprintf("poa-manager-%d", rand.Int31n(10000000))
+	manager.mqttUser = poaContext.Configs.MqttUser
+	manager.mqttPassword = poaContext.Configs.MqttPassword
 
 	mqtt.ERROR = log.New(os.Stdout, "[ERROR] ", 0)
 	mqtt.CRITICAL = log.New(os.Stdout, "[CRIT] ", 0)
@@ -138,19 +166,25 @@ func (manager *Manager) Init(poaContext *context.Context) {
 	manager.mqttOpts = mqtt.NewClientOptions()
 	manager.mqttOpts.AddBroker(fmt.Sprintf("tcp://%s:%d", manager.brokerAddress, manager.brokerPort))
 	manager.mqttOpts.SetClientID(manager.mqttClientName)
-	// manager.mqttOpts.SetUsername("emqx")
-	// manager.mqttOpts.SetPassword("public")
+	manager.mqttOpts.SetUsername(manager.mqttUser)
+	manager.mqttOpts.SetPassword(manager.mqttPassword)
 	manager.mqttOpts.SetDefaultPublishHandler(manager.mqttSubscribeHandler)
 	manager.mqttOpts.SetAutoReconnect(true)
 	manager.mqttOpts.OnConnect = func(client mqtt.Client) {
-		fmt.Println("Connected")
+		fmt.Println("MQTT Connected")
+
+		fmt.Println("Subscribe mine/#")
+		token := manager.mqttClient.Subscribe("mine/#", manager.mqttQos, nil)
+		token.Wait()
 	}
 	manager.mqttOpts.OnConnectionLost = func(client mqtt.Client, err error) {
-		fmt.Printf("Connect lost: %v", err)
+		fmt.Printf("MQTT Connect lost: %v", err)
 	}
 
 	manager.condChan = make(chan int, 100)
 	manager.nofityUpdatedChan = make(chan int)
+
+	poaContext.EventLooper.RegisterEventHandler(event.MANAGER, manager.eventListener)
 }
 
 func (manager *Manager) Start() {
@@ -163,9 +197,6 @@ func (manager *Manager) Start() {
 			time.AfterFunc(time.Second*60, mqttInit)
 			return
 		}
-
-		token := manager.mqttClient.Subscribe("mine/#", manager.mqttQos, nil)
-		token.Wait()
 	}
 	go mqttInit()
 
@@ -216,8 +247,8 @@ func (manager *Manager) getTotalDevices() ([]*DeviceInfo, []*DeviceInfo) {
 	resp, err := http.Get(fmt.Sprintf("http://%s:%d/device/list", manager.serverAddress, manager.serverPort))
 	if err == nil {
 		bytes, _ := ioutil.ReadAll(resp.Body)
-		str := string(bytes)
-		fmt.Println(str)
+		// str := string(bytes)
+		// fmt.Println(str)
 
 		response := Response{}
 		json.Unmarshal(bytes, &response)
@@ -292,4 +323,88 @@ func (manager *Manager) parsePayload(payload string) (deviceInfo DeviceInfo, err
 
 func (manager *Manager) WaitUpdated() {
 	<-manager.nofityUpdatedChan
+}
+
+func (manager *Manager) eventListener(name event.EventName, args []interface{}) {
+	fmt.Println("name:", name, args)
+
+	switch name {
+	case event.EVENT_MANAGER_DEVICE_RESTART:
+		command := Command{Type: "restart"}
+		command.Restart.Restart = true
+
+		doc, err := json.MarshalIndent(command, "", "    ")
+		if err == nil {
+			for _, device := range manager.TotalDevices {
+				if device.Alive {
+					cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
+
+					fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
+
+					// token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
+					// token.Wait()
+				}
+			}
+		} else {
+			log.Println(err)
+		}
+
+	case event.EVENT_MANAGER_DEVICE_MQTT_CHANGE_USER_PASSWORD:
+		if len(args) == 2 {
+			command := Command{Type: "mqtt"}
+			command.Mqtt.MqttUser = args[0].(string)
+			command.Mqtt.MqttPassword = args[1].(string)
+
+			doc, err := json.MarshalIndent(command, "", "    ")
+			if err == nil {
+				for _, device := range manager.TotalDevices {
+					if device.Alive {
+						cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
+
+						token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
+						token.Wait()
+					}
+				}
+			} else {
+				log.Println(err)
+			}
+		}
+	case event.EVENT_MANAGER_DEVICE_FORCE_UPDATE:
+		command := Command{Type: "update"}
+		command.Update.ForceUpdate = true
+
+		doc, err := json.MarshalIndent(command, "", "    ")
+		if err == nil {
+			for _, device := range manager.TotalDevices {
+				if device.Alive {
+					cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
+
+					token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
+					token.Wait()
+				}
+			}
+		} else {
+			log.Println(err)
+		}
+
+	case event.EVENT_MANAGER_DEVICE_CHANGE_UPDATE_ADDRESS:
+		if len(args) == 1 {
+			command := Command{Type: "update"}
+			command.Update.UpdateAddress = args[0].(string)
+
+			doc, err := json.MarshalIndent(command, "", "    ")
+			if err == nil {
+				for _, device := range manager.TotalDevices {
+					if device.Alive {
+						cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
+
+						token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
+						token.Wait()
+					}
+				}
+			} else {
+				log.Println(err)
+			}
+		}
+	}
 }

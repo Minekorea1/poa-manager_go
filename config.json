@@ -1,6 +1,0 @@
-{
-    "PoaServerAddress": "minekorea.asuscomm.com",
-    "PoaServerPort": 8888,
-    "MqttBrokerAddress": "minekorea.asuscomm.com",
-    "MqttPort": 1883
-}

@@ -1,6 +1,7 @@
 package context
 
 import (
+	"poa-manager/event"
 	"poa-manager/jsonWrapper"
 	"sync"
 )
@@ -8,9 +9,10 @@ import (
 type Context struct {
 	Version string
 
-	Configs Configs
-
+	Configs     Configs
 	mutexConfig *sync.Mutex
+
+	EventLooper *event.EventLooper
 }
 
 type Configs struct {
@@ -20,6 +22,8 @@ type Configs struct {
 	PoaServerPort          int
 	MqttBrokerAddress      string
 	MqttPort               int
+	MqttUser               string
+	MqttPassword           string
 }
 
 type DeviceType int
