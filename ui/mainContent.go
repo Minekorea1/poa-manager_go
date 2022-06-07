@@ -91,6 +91,8 @@ type contentConfig struct {
 	serverPortEntry    *numericalEntry
 	mqttAddressEntry   *widget.Entry
 	mqttPortEntry      *numericalEntry
+	mqttUserEntry      *widget.Entry
+	mqttPasswordEntry  *widget.Entry
 }
 
 func Init(_ *fyne.App, win *fyne.Window, ctx *context.Context, m *manager.Manager) {
@@ -161,6 +163,8 @@ func (menu *Menu) MakeMenu(parent *fyne.Container) *fyne.Container {
 					configContent.serverPortEntry.SetText(strconv.FormatInt(int64(poaContext.Configs.PoaServerPort), 10))
 					configContent.mqttAddressEntry.SetText(poaContext.Configs.MqttBrokerAddress)
 					configContent.mqttPortEntry.SetText(strconv.FormatInt(int64(poaContext.Configs.MqttPort), 10))
+					configContent.mqttUserEntry.SetText(poaContext.Configs.MqttUser)
+					configContent.mqttPasswordEntry.SetText(poaContext.Configs.MqttPassword)
 				}
 			}
 		},
@@ -521,7 +525,6 @@ func (structure *contentStructure) updateDetailView(device *manager.DeviceInfo) 
 	structure.treeDevices.Select(structure.makeUid(device))
 }
 
-//TODO:
 func newCommandDeviceControl() *contentDeviceControl {
 	deviceControl := contentDeviceControl{}
 
@@ -604,13 +607,18 @@ func newConfigContent() *contentConfig {
 	config.serverPortEntry = NewNumericalEntry()
 	config.mqttAddressEntry = widget.NewEntry()
 	config.mqttPortEntry = NewNumericalEntry()
+	config.mqttUserEntry = widget.NewEntry()
+	config.mqttPasswordEntry = widget.NewPasswordEntry()
 
 	form := &widget.Form{
 		Items: []*widget.FormItem{
 			{Text: "서버 주소", Widget: config.serverAddressEntry},
 			{Text: "서버 포트", Widget: config.serverPortEntry},
 			{Text: "MQTT 주소", Widget: config.mqttAddressEntry},
-			{Text: "MQTT 포트", Widget: config.mqttPortEntry}},
+			{Text: "MQTT 포트", Widget: config.mqttPortEntry},
+			{Text: "MQTT 사용자", Widget: config.mqttUserEntry},
+			{Text: "MQTT 패스워드", Widget: config.mqttPasswordEntry},
+		},
 		OnSubmit: func() {
 			oldConfigs := poaContext.Configs
 
@@ -618,6 +626,8 @@ func newConfigContent() *contentConfig {
 			poaContext.Configs.PoaServerPort, _ = strconv.Atoi(config.serverPortEntry.Text)
 			poaContext.Configs.MqttBrokerAddress = config.mqttAddressEntry.Text
 			poaContext.Configs.MqttPort, _ = strconv.Atoi(config.mqttPortEntry.Text)
+			poaContext.Configs.MqttUser = config.mqttUserEntry.Text
+			poaContext.Configs.MqttPassword = config.mqttPasswordEntry.Text
 			poaContext.WriteConfig()
 
 			if oldConfigs != poaContext.Configs {
