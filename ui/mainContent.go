@@ -10,6 +10,7 @@ import (
 
 	"poa-manager/context"
 	"poa-manager/event"
+	"poa-manager/log"
 	"poa-manager/manager"
 	"poa-manager/res"
 
@@ -19,6 +20,8 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
+
+var logger log.Logger = log.NewLogger("ui")
 
 type CustomContent interface {
 	GetContent() *fyne.Container
@@ -267,7 +270,7 @@ func newStatusContent() *contentStatus {
 
 		// remove device button
 		status.buttonRemove.OnTapped = func() {
-			fmt.Println("remove device: ", device)
+			logger.LogD("remove device: ", device)
 			if ok, _ := poaManager.RemoveDevices(device.DeviceId); ok {
 				status.detailContent.Hide()
 				status.listDevices.UnselectAll()
@@ -384,7 +387,7 @@ func newStructureContent() *contentStructure {
 	structure.treeDevices.ExtendBaseWidget(structure.treeDevices)
 
 	structure.treeDevices.OnSelected = func(uid string) {
-		fmt.Println("Tree node selected:", uid)
+		logger.LogD("Tree node selected:", uid)
 
 		if match, _ := regexp.MatchString("[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]", uid); match {
 			structure.detailContent.Hide()
@@ -402,7 +405,7 @@ func newStructureContent() *contentStructure {
 
 			// remove device button
 			structure.buttonRemove.OnTapped = func() {
-				fmt.Println("remove device: ", device)
+				logger.LogD("remove device: ", device)
 				if ok, _ := poaManager.RemoveDevices(deviceId); ok {
 					treeDeviceItems := structure.treeData[device.PublicIp]
 					structure.treeData[device.PublicIp] = []string{}
@@ -429,7 +432,7 @@ func newStructureContent() *contentStructure {
 	}
 
 	structure.treeDevices.OnUnselected = func(id string) {
-		fmt.Println("Tree node unselected:", id)
+		logger.LogD("Tree node unselected:", id)
 	}
 
 	structure.detailContent = container.NewVBox()

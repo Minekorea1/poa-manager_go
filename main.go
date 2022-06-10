@@ -3,15 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
+	"strings"
+
 	"poa-manager/context"
 	"poa-manager/event"
+	"poa-manager/log"
 	"poa-manager/manager"
 	"poa-manager/res"
 	"poa-manager/ui"
-	"strings"
-
 	poaUpdater "poa-manager/updater"
 
 	"fyne.io/fyne/v2"
@@ -19,8 +19,10 @@ import (
 	"fyne.io/fyne/v2/container"
 )
 
+var logger log.Logger = log.NewLogger("main")
+
 const (
-	VERSION_NAME                          = "v0.3.1"
+	VERSION_NAME                          = "v0.3.2"
 	APPLICATION_UPDATE_ADDRESS            = "github.com/Minekorea1/poa-manager_go"
 	APPLICATION_UPDATE_CHECK_INTERVAL_SEC = 3600
 )
@@ -59,7 +61,7 @@ func main() {
 		return
 	}
 
-	fmt.Printf("version: %s\n", VERSION_NAME)
+	logger.Print(log.Info, "version: %s\n", VERSION_NAME)
 
 	context := Initialize()
 
@@ -81,10 +83,10 @@ func main() {
 	a.SetIcon(res.Ic_main)
 	a.Settings().SetTheme(&ui.MyTheme{})
 	a.Lifecycle().SetOnStarted(func() {
-		log.Println("Lifecycle: Started")
+		// log.Println("Lifecycle: Started")
 	})
 	a.Lifecycle().SetOnStopped(func() {
-		log.Println("Lifecycle: Stopped")
+		// log.Println("Lifecycle: Stopped")
 	})
 	win := a.NewWindow("PoA Manager " + VERSION_NAME)
 	a.Settings().SetTheme(&ui.MyTheme{})

@@ -4,19 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/http"
-	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	"poa-manager/context"
 	"poa-manager/event"
+	"poa-manager/log"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
+
+var logger log.Logger = log.NewLogger("manager")
 
 type DeviceInfo struct {
 	Timestamp int64
@@ -113,18 +114,18 @@ func NewManager() *Manager {
 
 func (manager *Manager) mqttSubscribeHandler(client mqtt.Client, msg mqtt.Message) {
 	go func() {
-		// fmt.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+		logger.LogV("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 
 		if match, _ := regexp.MatchString("mine/server/updated", msg.Topic()); match {
-			fmt.Println("rise mqtt updated message. start check status")
+			logger.LogD("rise mqtt updated message. start check status")
 			manager.condChan <- 0
 		} else if match, _ := regexp.MatchString("mine/[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+/.+/poa/info", msg.Topic()); match {
-			fmt.Println("rise mqtt poa message. start check status")
+			logger.LogD("rise mqtt poa message. start check status")
 
 			deviceInfo, err := manager.parsePayload(string(msg.Payload()))
 
 			if err != nil {
-				log.Println(err)
+				logger.LogE(err)
 				return
 			}
 
@@ -149,6 +150,17 @@ func (manager *Manager) mqttSubscribeHandler(client mqtt.Client, msg mqtt.Messag
 	}()
 }
 
+type mqttLogger struct {
+	logger log.Logger
+}
+
+func (mqttLogger) Println(v ...interface{}) {
+	logger.Log(logger.GetLevel(), v...)
+}
+func (mqttLogger) Printf(format string, v ...interface{}) {
+	logger.Print(logger.GetLevel(), format, v...)
+}
+
 func (manager *Manager) Init(poaContext *context.Context) {
 	rand.Seed(time.Now().UnixNano())
 
@@ -162,10 +174,10 @@ func (manager *Manager) Init(poaContext *context.Context) {
 	manager.mqttUser = poaContext.Configs.MqttUser
 	manager.mqttPassword = poaContext.Configs.MqttPassword
 
-	mqtt.ERROR = log.New(os.Stdout, "[ERROR] ", 0)
-	mqtt.CRITICAL = log.New(os.Stdout, "[CRIT] ", 0)
-	mqtt.WARN = log.New(os.Stdout, "[WARN]  ", 0)
-	// mqtt.DEBUG = log.New(os.Stdout, "[DEBUG] ", 0)
+	mqtt.ERROR = mqttLogger{logger: logger}
+	mqtt.CRITICAL = mqttLogger{logger: logger}
+	mqtt.WARN = mqttLogger{logger: logger}
+	// mqtt.DEBUG = mqttLogger{logger: logger}
 
 	manager.mqttOpts = mqtt.NewClientOptions()
 	manager.mqttOpts.AddBroker(fmt.Sprintf("tcp://%s:%d", manager.brokerAddress, manager.brokerPort))
@@ -175,14 +187,14 @@ func (manager *Manager) Init(poaContext *context.Context) {
 	manager.mqttOpts.SetDefaultPublishHandler(manager.mqttSubscribeHandler)
 	manager.mqttOpts.SetAutoReconnect(true)
 	manager.mqttOpts.OnConnect = func(client mqtt.Client) {
-		fmt.Println("MQTT Connected")
+		logger.LogI("MQTT Connected")
+		logger.LogD("Subscribe mine/#")
 
-		fmt.Println("Subscribe mine/#")
 		token := manager.mqttClient.Subscribe("mine/#", manager.mqttQos, nil)
 		token.Wait()
 	}
 	manager.mqttOpts.OnConnectionLost = func(client mqtt.Client, err error) {
-		fmt.Printf("MQTT Connect lost: %v", err)
+		logger.LogI("MQTT Connect lost: %v", err)
 	}
 
 	manager.condChan = make(chan int, 100)
@@ -197,7 +209,8 @@ func (manager *Manager) Start() {
 		manager.mqttClient = mqtt.NewClient(manager.mqttOpts)
 
 		if token := manager.mqttClient.Connect(); token.Wait() && token.Error() != nil {
-			log.Println(token.Error())
+			logger.LogE(token.Error())
+			logger.LogI("retry after 60 seconds")
 			time.AfterFunc(time.Second*60, mqttInit)
 			return
 		}
@@ -230,7 +243,7 @@ func (manager *Manager) getDeviceStatus() (total int, dead int) {
 	if err == nil {
 		bytes, _ := ioutil.ReadAll(resp.Body)
 		str := string(bytes)
-		fmt.Println(str)
+		logger.LogD(str)
 
 		response := Response{Device: &Device{DeadDevice: &DeadDevice{}}}
 		json.Unmarshal(bytes, &response)
@@ -238,7 +251,7 @@ func (manager *Manager) getDeviceStatus() (total int, dead int) {
 		total = response.Device.TotalNum
 		dead = response.Device.DeadDevice.Num
 	} else {
-		log.Println(err)
+		logger.LogE(err)
 	}
 
 	return
@@ -252,7 +265,7 @@ func (manager *Manager) getTotalDevices() ([]*DeviceInfo, []*DeviceInfo) {
 	if err == nil {
 		bytes, _ := ioutil.ReadAll(resp.Body)
 		// str := string(bytes)
-		// fmt.Println(str)
+		// logger.LogD(str)
 
 		response := Response{}
 		json.Unmarshal(bytes, &response)
@@ -260,7 +273,7 @@ func (manager *Manager) getTotalDevices() ([]*DeviceInfo, []*DeviceInfo) {
 		totalDevices = response.Device.List
 		deadDevices = response.Device.DeadDevice.List
 	} else {
-		log.Println(err)
+		logger.LogE(err)
 	}
 
 	return totalDevices, deadDevices
@@ -273,14 +286,14 @@ func (manager *Manager) getDeadDevices() []*DeviceInfo {
 	if err == nil {
 		bytes, _ := ioutil.ReadAll(resp.Body)
 		str := string(bytes)
-		fmt.Println(str)
+		logger.LogD(str)
 
 		response := Response{Device: &Device{}}
 		json.Unmarshal(bytes, &response)
 
 		deadDevices = response.Device.DeadDevice.List
 	} else {
-		log.Println(err)
+		logger.LogE(err)
 	}
 
 	return deadDevices
@@ -290,7 +303,7 @@ func (manager *Manager) RemoveDevices(id string) (bool, string) {
 	var reqBody string
 	req, err := http.NewRequest("DELETE", fmt.Sprintf("http://%s:%d/device/remove/%s", manager.serverAddress, manager.serverPort, id), strings.NewReader(reqBody))
 	if err != nil {
-		log.Println(err)
+		logger.LogE(err)
 
 		return false, ""
 	}
@@ -299,7 +312,7 @@ func (manager *Manager) RemoveDevices(id string) (bool, string) {
 	if err == nil {
 		bytes, _ := ioutil.ReadAll(resp.Body)
 		str := string(bytes)
-		fmt.Println(str)
+		logger.LogD(str)
 
 		response := Response{ /* Remove: &Remove{} */ }
 		json.Unmarshal(bytes, &response)
@@ -310,7 +323,7 @@ func (manager *Manager) RemoveDevices(id string) (bool, string) {
 			return false, ""
 		}
 	} else {
-		log.Println(err)
+		logger.LogE(err)
 	}
 
 	return false, ""
@@ -319,7 +332,7 @@ func (manager *Manager) RemoveDevices(id string) (bool, string) {
 func (manager *Manager) parsePayload(payload string) (deviceInfo DeviceInfo, err error) {
 	err = json.Unmarshal([]byte(payload), &deviceInfo)
 	if err != nil {
-		log.Println(err)
+		logger.LogE(err)
 	}
 
 	return
@@ -330,7 +343,7 @@ func (manager *Manager) WaitUpdated() {
 }
 
 func (manager *Manager) eventListener(name event.EventName, args []interface{}) {
-	fmt.Println("name:", name, args)
+	logger.LogD("name:", name, args)
 
 	switch name {
 	case event.EVENT_MANAGER_DEVICE_RESTART:
@@ -343,14 +356,14 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 				if device.Alive {
 					cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
 
-					fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
+					logger.LogD("cmdAddress:", cmdAddress, " <- ", string(doc))
 
 					token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
 					token.Wait()
 				}
 			}
 		} else {
-			log.Println(err)
+			logger.LogE(err)
 		}
 
 	case event.EVENT_MANAGER_DEVICE_MQTT_CHANGE_USER_PASSWORD:
@@ -365,14 +378,14 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 					if device.Alive {
 						cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
 
-						fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
+						logger.LogD("cmdAddress:", cmdAddress, " <- ", string(doc))
 
 						token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
 						token.Wait()
 					}
 				}
 			} else {
-				log.Println(err)
+				logger.LogE(err)
 			}
 		}
 	case event.EVENT_MANAGER_DEVICE_FORCE_UPDATE:
@@ -385,14 +398,14 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 				if device.Alive {
 					cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
 
-					fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
+					logger.LogD("cmdAddress:", cmdAddress, " <- ", string(doc))
 
 					token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
 					token.Wait()
 				}
 			}
 		} else {
-			log.Println(err)
+			logger.LogE(err)
 		}
 
 	case event.EVENT_MANAGER_DEVICE_CHANGE_UPDATE_ADDRESS:
@@ -406,14 +419,14 @@ func (manager *Manager) eventListener(name event.EventName, args []interface{}) 
 					if device.Alive {
 						cmdAddress := fmt.Sprintf("mine/%s/%s/poa/command", device.PublicIp, device.DeviceId)
 
-						fmt.Println("cmdAddress:", cmdAddress, " <- ", string(doc))
+						logger.LogD("cmdAddress:", cmdAddress, " <- ", string(doc))
 
 						token := manager.mqttClient.Publish(cmdAddress, manager.mqttQos, false, string(doc))
 						token.Wait()
 					}
 				}
 			} else {
-				log.Println(err)
+				logger.LogE(err)
 			}
 		}
 	}

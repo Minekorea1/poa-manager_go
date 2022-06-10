@@ -3,7 +3,6 @@ package updater
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -12,10 +11,13 @@ import (
 	"time"
 
 	"poa-manager/context"
+	"poa-manager/log"
 
 	"github.com/mouuff/go-rocket-update/pkg/provider"
 	rokUpdater "github.com/mouuff/go-rocket-update/pkg/updater"
 )
+
+var logger log.Logger = log.NewLogger("updater")
 
 type VersionRO int
 
@@ -125,33 +127,33 @@ func (updater *Updater) update() (bool, error) {
 
 	lastestVersion, err := u.GetLatestVersion()
 
-	fmt.Printf("current Version: %s, server Version: %s\n", u.Version, lastestVersion)
+	logger.LogFormat(log.Debug, "check version: current Version = %s, server Version = %s\n", u.Version, lastestVersion)
 
 	if err == nil {
 		if versionCompare(u.Version, lastestVersion) == lt {
-			fmt.Println("software update start")
+			logger.LogI("software update start")
 			updateStatus, err := u.Update()
 			if err != nil {
-				log.Println(err)
+				logger.LogE(err)
 			}
 			if updateStatus == rokUpdater.Updated {
 				if err := verify(u); err != nil {
-					log.Println(err)
-					log.Println("Rolling back...")
+					logger.LogE(err)
+					logger.LogW("Rolling back...")
 					u.Rollback()
 					return false, err
 				}
 
-				fmt.Println("software update complete.")
+				logger.LogI("software update complete.")
 				return true, nil
 			} else {
-				fmt.Println("software update failed.")
+				logger.LogW("software update failed.")
 			}
 		}
 
 		return false, errors.New("software update failed")
 	} else {
-		log.Println(err)
+		logger.LogE(err)
 		return false, err
 	}
 }
