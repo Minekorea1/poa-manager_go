@@ -114,7 +114,7 @@ func NewManager() *Manager {
 
 func (manager *Manager) mqttSubscribeHandler(client mqtt.Client, msg mqtt.Message) {
 	go func() {
-		logger.LogV("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+		logger.LogfV("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
 
 		if match, _ := regexp.MatchString("mine/server/updated", msg.Topic()); match {
 			logger.LogD("rise mqtt updated message. start check status")
@@ -151,14 +151,15 @@ func (manager *Manager) mqttSubscribeHandler(client mqtt.Client, msg mqtt.Messag
 }
 
 type mqttLogger struct {
-	logger log.Logger
+	log.Logger
 }
 
-func (mqttLogger) Println(v ...interface{}) {
-	logger.Log(logger.GetLevel(), v...)
+func (l mqttLogger) Println(v ...interface{}) {
+	l.Log(l.Level, v...)
 }
-func (mqttLogger) Printf(format string, v ...interface{}) {
-	logger.Print(logger.GetLevel(), format, v...)
+
+func (l mqttLogger) Printf(format string, v ...interface{}) {
+	l.LogFormat(l.Level, format, v...)
 }
 
 func (manager *Manager) Init(poaContext *context.Context) {
@@ -174,10 +175,10 @@ func (manager *Manager) Init(poaContext *context.Context) {
 	manager.mqttUser = poaContext.Configs.MqttUser
 	manager.mqttPassword = poaContext.Configs.MqttPassword
 
-	mqtt.ERROR = mqttLogger{logger: logger}
-	mqtt.CRITICAL = mqttLogger{logger: logger}
-	mqtt.WARN = mqttLogger{logger: logger}
-	// mqtt.DEBUG = mqttLogger{logger: logger}
+	mqtt.ERROR = mqttLogger{Logger: log.Logger{Tag: "mqtt", Timestamp: true, Level: log.Fatal}}
+	mqtt.CRITICAL = mqttLogger{Logger: log.Logger{Tag: "mqtt", Timestamp: true, Level: log.Error}}
+	mqtt.WARN = mqttLogger{Logger: log.Logger{Tag: "mqtt", Timestamp: true, Level: log.Warning}}
+	// mqtt.DEBUG = mqttLogger{Logger: log.Logger{Tag: "mqtt", Timestamp: true, Level: log.Debug}}
 
 	manager.mqttOpts = mqtt.NewClientOptions()
 	manager.mqttOpts.AddBroker(fmt.Sprintf("tcp://%s:%d", manager.brokerAddress, manager.brokerPort))
@@ -187,14 +188,14 @@ func (manager *Manager) Init(poaContext *context.Context) {
 	manager.mqttOpts.SetDefaultPublishHandler(manager.mqttSubscribeHandler)
 	manager.mqttOpts.SetAutoReconnect(true)
 	manager.mqttOpts.OnConnect = func(client mqtt.Client) {
-		logger.LogI("MQTT Connected")
+		logger.LogI("MQTT connected")
 		logger.LogD("Subscribe mine/#")
 
 		token := manager.mqttClient.Subscribe("mine/#", manager.mqttQos, nil)
 		token.Wait()
 	}
 	manager.mqttOpts.OnConnectionLost = func(client mqtt.Client, err error) {
-		logger.LogI("MQTT Connect lost: %v", err)
+		logger.LogfI("MQTT connect lost: %v", err)
 	}
 
 	manager.condChan = make(chan int, 100)

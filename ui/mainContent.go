@@ -253,7 +253,7 @@ func newStatusContent() *contentStatus {
 				item.(*fyne.Container).Objects[0].Show()
 			}
 
-			item.(*fyne.Container).Objects[1].(*widget.Label).SetText(fmt.Sprintf("%s[%d] %s", device.Owner, device.OwnNumber, device.DeviceDesc))
+			item.(*fyne.Container).Objects[1].(*widget.Label).SetText(fmt.Sprintf("%s[%d]: %s", device.Owner, device.OwnNumber, device.DeviceDesc))
 		})
 	status.listDevices.OnSelected = func(id widget.ListItemID) {
 		var device *manager.DeviceInfo
@@ -372,7 +372,7 @@ func newStructureContent() *contentStructure {
 				owner := strings.ReplaceAll(nodeInfos[1], "\\\\", "\\")
 				ownNumber := nodeInfos[2]
 				desc := strings.ReplaceAll(nodeInfos[3], "\\\\", "\\")
-				node.(*fyne.Container).Objects[1].(*widget.Label).SetText(fmt.Sprintf("%s[%s] %s", owner, ownNumber, desc))
+				node.(*fyne.Container).Objects[1].(*widget.Label).SetText(fmt.Sprintf("%s[%s]: %s", owner, ownNumber, desc))
 
 				if poaManager.Devices[nodeInfos[0]].Alive {
 					node.(*fyne.Container).Objects[0].(*widget.Icon).Hide()

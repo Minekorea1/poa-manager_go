@@ -22,7 +22,7 @@ import (
 var logger log.Logger = log.NewLogger("main")
 
 const (
-	VERSION_NAME                          = "v0.3.2"
+	VERSION_NAME                          = "v0.3.3"
 	APPLICATION_UPDATE_ADDRESS            = "github.com/Minekorea1/poa-manager_go"
 	APPLICATION_UPDATE_CHECK_INTERVAL_SEC = 3600
 )
